@@ -1,0 +1,98 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git show*)",
+      "Bash(git fetch*)",
+      "PowerShell(git status*)",
+      "PowerShell(git diff*)",
+      "PowerShell(git log*)",
+      "PowerShell(git branch*)",
+      "PowerShell(git show*)",
+      "PowerShell(git fetch*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh repo view*)",
+      "Bash(gh auth status*)",
+      "PowerShell(gh pr view*)",
+      "PowerShell(gh pr list*)",
+      "PowerShell(gh pr diff*)",
+      "PowerShell(gh repo view*)",
+      "PowerShell(gh auth status*)",
+      "Bash(uv sync*)",
+      "Bash(uv lock --check*)",
+      "Bash(uv run*)",
+      "PowerShell(uv sync*)",
+      "PowerShell(uv lock --check*)",
+      "PowerShell(uv run*)",
+      "Bash(az account show*)",
+      "Bash(az bicep build*)",
+      "Bash(az bicep lint*)",
+      "Bash(az deployment sub what-if*)",
+      "Bash(az containerapp job show*)",
+      "Bash(az containerapp job execution list*)",
+      "PowerShell(az account show*)",
+      "PowerShell(az bicep build*)",
+      "PowerShell(az bicep lint*)",
+      "PowerShell(az deployment sub what-if*)",
+      "PowerShell(az containerapp job show*)",
+      "PowerShell(az containerapp job execution list*)"
+    ],
+    "ask": [
+      "Bash(az deployment sub create*)",
+      "Bash(az acr build*)",
+      "Bash(gh pr merge*)",
+      "Bash(git push*)",
+      "PowerShell(az deployment sub create*)",
+      "PowerShell(az acr build*)",
+      "PowerShell(gh pr merge*)",
+      "PowerShell(git push*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(az group delete*)",
+      "Bash(az keyvault delete*)",
+      "Bash(az keyvault purge*)",
+      "PowerShell(git push --force*)",
+      "PowerShell(git push -f*)",
+      "PowerShell(az group delete*)",
+      "PowerShell(az keyvault delete*)",
+      "PowerShell(az keyvault purge*)",
+      "Read(.venv/**)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(*.pfx)",
+      "Read(*.pem)",
+      "Read(*.key)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/.claude/hooks/require-work-branch.ps1\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-protected-git.ps1\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
