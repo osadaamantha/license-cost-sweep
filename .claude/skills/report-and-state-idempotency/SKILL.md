@@ -9,9 +9,11 @@ description: Write or review code that produces licence-waste reports and tracks
 
 ## Report generation
 
-- One report workbook per client tenant per run — never combine two clients' findings into one workbook, and never combine two clients' tickets/notifications either (see `license-cost-safety`).
+- One report workbook per client tenant per run — never combine two clients' findings into one workbook, and never combine two clients' tickets either (see `license-cost-safety`).
 - Key each report and state entry by tenant identifier + run id, so a re-run or retry doesn't silently overwrite a different tenant's output or a previous run's history.
-- Report figures should distinguish confirmed waste (e.g. a disabled account with a directly-assigned licence) from figures that depend on an external cost input (see `graph-exchange-readonly`'s note that Graph exposes no pricing) — never present an estimated dollar saving as if it came from a verified source.
+- No dollar/cost figures belong in the report at all for v1 — licence pricing is confirmed out of scope (see `CLAUDE.md`), not something to estimate or present.
+- Report structure should distinguish confirmed findings (e.g. a disabled account with a directly-assigned licence) from "needs manual review" findings (shared mailboxes with paid licences) — never collapse a review-needed row into a pass/fail verdict.
+- **Ticketing**: exactly one Autotask ticket per client tenant per run, listing every finding — never one ticket per finding, never combined across clients. Ticket creation should be idempotent the same way report writes are: check `run-state` before creating, write `run-state` only after the ticket is confirmed created.
 
 ## Idempotency
 
@@ -26,4 +28,4 @@ description: Write or review code that produces licence-waste reports and tracks
 
 ## What never goes in a report or log
 
-Mailbox contents, subjects, tokens, private keys, credentials, licence cost figures sourced from a client-specific contract, or the client spreadsheet/ITGlue data used to configure a tenant — reports carry only the licence-waste findings they exist to convey.
+Mailbox contents, subjects, tokens, private keys, credentials, or the client spreadsheet/ITGlue data used to configure a tenant — reports carry only the licence-waste findings they exist to convey.

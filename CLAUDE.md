@@ -4,13 +4,25 @@ Canonical project name is **`license-cost-sweep`** / intended PowerShell module 
 
 ## What this is
 
-A multi-tenant MSP licence-waste audit. The intended shape mirrors the sibling `mailbox-audit-sweep` repo: one Entra app registration, authenticated with a certificate credential, consented into each client tenant via GDAP/Lighthouse. Read-only against Microsoft Graph and Exchange Online. It is meant to find, per client tenant:
+A multi-tenant MSP licence-waste audit. Read-only against Microsoft Graph and Exchange Online. Despite the name, **no cost/pricing calculation is in scope for v1** — confirmed directly with the client-facing stakeholder ("What pricing should we use: CSP cost, Microsoft list price, or a provided cost list?" → "This is not needed"). The "sweep" here identifies waste and risk patterns, not dollar values; don't build a CSP-cost or Microsoft-list-price lookup.
 
-1. Disabled/blocked accounts that still hold paid licences.
-2. Shared mailboxes carrying licences they don't need (accounting for the legitimate exceptions: >50 GB mailbox size, litigation hold, in-place archive).
-3. Licensed users who have never signed in.
+**Auth model — open question, don't assume.** The sibling `mailbox-audit-sweep` repo originally assumed a standalone cert-based Entra app + GDAP/Lighthouse consent, then discovered mid-project that the real, confirmed design is a **shared** multi-tenant app (`MSP Blueshift Integration`) used across every MSP automation, authenticating via a federated identity credential tied to a managed identity — no certificate, no per-project app registration. That shared app's documented permission set already includes licence-usage reporting scopes. Before designing this project's auth, confirm with the stakeholder whether license-cost-sweep should reuse that same shared app/identity rather than provisioning a new one. Don't build against either assumption until it's confirmed.
 
-Reports would land as Excel workbooks in blob storage, on a daily schedule — none of this is built yet (see below).
+It is meant to find, per client tenant:
+
+1. **Disabled/blocked accounts that still hold paid licences.**
+2. **Duplicate/overlapping licences** — a user holding two SKUs where one makes the other redundant. Confirmed in-scope ("this would help if a certain licence is not needed"), but the actual overlap map (which SKU pairs count as redundant) is **not yet defined** — flag this explicitly as an open dependency in any work that touches this finding; don't invent a plausible-looking overlap table.
+3. **Licensed users who have never signed in** — 30-day inactivity threshold. New users get the same 30-day grace period before being flagged as "never signed in," measured from account creation date.
+4. **Shared mailboxes carrying paid licences** — flagged for **manual review, never auto-classified as waste or auto-exempted**. The stakeholder was explicit this is context-dependent ("some mailboxes are signed into as a way to create a mail merge") — there is no confirmed size/litigation-hold/archive exception rule. Report these as a distinct "needs review" category, not a finding with a verdict.
+5. **Service/automation accounts** are reported **separately** from regular user findings, not excluded from the report and not folded into another category.
+
+**Explicitly not a separate category**: accounts on long-term leave or legal hold get no bespoke exclusion list — they fold into the standard inactive-user detection (#3), per the stakeholder's own answer.
+
+**Scope is all paid licences** — no subset filtering, and group-assigned licences are not shown separately from directly-assigned ones (the "all licences" scope already covers them; don't build a direct-vs-group-assigned split into the report).
+
+**Ticketing**: one Autotask ticket per client tenant, listing every finding in that single ticket — never one ticket per individual finding. This is the one intentional mutation this runtime performs (see the safety rules below) — everything else stays read-only.
+
+Reports would land as Excel workbooks in blob storage, on a daily/weekly schedule (cadence not yet decided) — none of this is built yet (see below).
 
 ## Current state — read this before trusting any skill's assumptions
 
@@ -22,9 +34,11 @@ Concretely, as of this bootstrap commit:
 - **Infrastructure**: none. No `infra/`, no Bicep, no resource group, no Key Vault, no storage account. The `bicep-authoring`, `deploy-azure-container-job`, `container-image-release`, and `report-and-state-idempotency` skills describe the *intended* pattern (borrowed from the sibling repo) for when this work starts — they name planned resources (`caj-liccost-daily`, `kv-liccost-prod`, `stliccostprod`) that do not exist yet.
 - **Container image**: none. No Dockerfile.
 - **Python**: a vestigial `uv init --package` stub (`src/license_cost_sweep/__init__.py`, prints a greeting). Not the deliverable — kept alive only because `uv lock --check` is a live pre-PR gate.
-- **Deployment topology**: undecided whether this shares the sibling's Entra app registration / GDAP consent / Key Vault / storage account, or gets its own. Don't assume either way — raise it when infra work starts.
-- **Licence price source**: undecided. Microsoft Graph returns SKU and assignment data but never pricing — the cost basis will need to come from a CSP/Partner Center price list, a manually maintained CSV, or ITGlue. Flag this as an open dependency in any work that touches cost figures; don't invent a number or a source.
+- **Deployment topology**: undecided whether this shares the sibling's Key Vault / storage account / Container Apps Environment, or gets its own. See the auth-model open question above — raise both together when infra work starts.
+- **Licence pricing**: confirmed **out of scope for v1** (see "What this is" above) — this is a settled decision, not an open dependency to chase down. Don't build a cost-basis lookup against a CSP price list, CSV, or ITGlue unless a later, explicit scope change asks for it.
+- **Duplicate/overlapping licence SKU map**: undecided — confirmed in-scope as a finding, but which specific SKU pairs count as "redundant" has not been defined yet. Flag this as an open dependency in any Analysis-layer work that touches this finding; don't invent a plausible-looking overlap table.
 - **Entra ID P1/P2 coverage**: unknown per client tenant. The "never signed in" finding depends on `signInActivity`, which requires Entra ID P1/P2 in that tenant. Where it's absent, that finding must degrade to `Unknown` for that tenant, not be silently omitted or asserted anyway.
+- **Autotask ticket-creation credentials/board**: not yet arranged. The confirmed ticketing shape (one ticket per client, all findings listed) is settled; the actual API key and target board are not.
 
 Don't let a skill or a habit from other repos assume tooling, tests, or CI that don't exist here. State the gap instead of working around it silently.
 
@@ -48,10 +62,10 @@ This workstation runs **ThreatLocker** (app-control, `defaultdeny`+`ringfencing`
 
 ## Non-negotiable safety rules
 
-- The production runtime is **read-only** against Exchange Online, Microsoft Graph, and Entra ID. Never add `Set-`, `New-`, `Remove-`, `Enable-`, `Disable-`, or `Update-` mutation cmdlets to runtime code. This explicitly includes `Set-MgUserLicense`, `Set-MsolUserLicense`, `Set-AzureADUserLicense`, `Update-MgUser`, and `Set-Mailbox` — and, less obviously, `Remove-MgGroupMemberByRef`/`Remove-MgUserMemberOf`, because removing a group member revokes any licence assigned through that group. Onboarding/admin scripts that legitimately need mutation stay clearly separated from the runtime image.
-- Secrets come only from Key Vault via the job's managed identity. Never write tokens, private keys, credentials, mailbox contents, subjects, licence cost figures, or client spreadsheets into source, logs, fixtures, test data, or prompts.
+- The production runtime is **read-only** against Exchange Online, Microsoft Graph, and Entra ID. Never add `Set-`, `New-`, `Remove-`, `Enable-`, `Disable-`, or `Update-` mutation cmdlets to runtime code. This explicitly includes `Set-MgUserLicense`, `Set-MsolUserLicense`, `Set-AzureADUserLicense`, `Update-MgUser`, and `Set-Mailbox` — and, less obviously, `Remove-MgGroupMemberByRef`/`Remove-MgUserMemberOf`, because removing a group member revokes any licence assigned through that group. Onboarding/admin scripts that legitimately need mutation stay clearly separated from the runtime image. **One confirmed exception**: this runtime does create Autotask tickets (one per client, listing every finding) — that's an intended side effect, not a violation of the read-only rule. Keep ticket-creation code isolated in its own adapter; it should be the only mutating call path anywhere in the runtime.
+- Secrets come only from Key Vault via the job's managed identity. Never write tokens, private keys, credentials, mailbox contents, subjects, or client spreadsheets into source, logs, fixtures, test data, or prompts.
 - Every client tenant is isolated: authenticate independently, use tenant-specific config, continue past a single client's failure, and never combine report or ticket data across clients.
-- Missing or unavailable evidence — including sign-in activity where a tenant lacks Entra ID P1/P2, and licence pricing, which Graph never provides — is classified `Unknown`, never inferred into a finding.
+- Missing or unavailable evidence — including sign-in activity where a tenant lacks Entra ID P1/P2 — is classified `Unknown`, never inferred into a finding. (Licence pricing isn't in this category — it's confirmed out of scope for v1 entirely, not evidence this runtime attempts to collect.)
 - Flag uncertain API fields, permissions, or service limits rather than inventing plausible-sounding ones.
 
 ## Commands that actually work today

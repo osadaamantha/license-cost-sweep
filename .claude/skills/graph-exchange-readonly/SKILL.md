@@ -1,6 +1,6 @@
 ---
 name: graph-exchange-readonly
-description: Author or review PowerShell code that reads Microsoft Graph or Exchange Online data for the licence-cost-sweep runtime. Use for licence-waste detection, disabled-account detection, never-signed-in detection, multi-tenant authentication, and throttling/retry behavior against these APIs.
+description: Author or review PowerShell code that reads Microsoft Graph or Exchange Online data for the licence-cost-sweep runtime. Use for licence-waste detection, disabled-account detection, never-signed-in detection, duplicate/overlapping licence detection, shared-mailbox review flagging, service-account reporting, multi-tenant authentication, and throttling/retry behavior against these APIs.
 ---
 
 # Graph & Exchange Read-Only Access
@@ -9,9 +9,9 @@ This is the core runtime and the highest-risk area in the project — it's the o
 
 ## Authentication
 
-- App-only, certificate-based auth only — never a client secret, never interactive/delegated auth in runtime code. The runtime is a **Linux container**, so `-CertificateThumbprint` (Windows-only — it resolves against the Windows certificate store) is not available: use `Connect-ExchangeOnline -Certificate <X509Certificate2>` built in memory from the Key Vault secret bytes. `Connect-MgGraph -ClientId -Certificate -TenantId` the same way. Never `-Interactive` or `-DeviceCode`. (`-CertificateThumbprint` remains valid for `Connect-MgGraph` on Windows dev workstations only — never assume it works inside the runtime image.)
-- The certificate's private key is retrieved from Key Vault via the job's managed identity at runtime — never written to disk, never logged, never embedded in a fixture.
-- One connection per client tenant. Fully disconnect (`Disconnect-ExchangeOnline`, `Disconnect-MgGraph`) before moving to the next tenant — a lingering session from tenant A must never serve a call intended for tenant B.
+**Open question — see `CLAUDE.md`'s auth-model note before implementing any of this.** It's unconfirmed whether this project provisions its own certificate-based app registration or reuses the sibling project's shared, federated-identity app. Do not implement `Connect-ExchangeOnline -Certificate`/`Connect-MgGraph -Certificate` against a Key Vault secret as the default path — that was the sibling repo's original assumption and turned out to be wrong there. Confirm the actual model first.
+
+Regardless of which model is confirmed: never a client secret, never interactive/delegated auth in runtime code, never `-Interactive` or `-DeviceCode`. Whatever the credential material turns out to be, it's retrieved from Key Vault via the job's managed identity at runtime — never written to disk, never logged, never embedded in a fixture. One connection per client tenant; fully disconnect (`Disconnect-ExchangeOnline`, `Disconnect-MgGraph`) before moving to the next tenant — a lingering session from tenant A must never serve a call intended for tenant B.
 
 ## Least-privilege scope
 
@@ -25,15 +25,18 @@ This is the core runtime and the highest-risk area in the project — it's the o
 - This is easy to get wrong for this specific project: under **group-based licensing**, `Remove-MgGroupMemberByRef` / `Remove-MgUserMemberOf` *is* a licence revocation even though the cmdlet name doesn't mention licences. Treat group-membership mutation cmdlets as licence-mutation cmdlets for the purposes of this rule.
 - Onboarding/administration scripts that legitimately need mutation (e.g. initial app consent, certificate rotation) live outside the runtime image and are clearly named/located so they're never mistaken for runtime code.
 
-## Data sources for the three waste categories
+## Data sources for the five finding categories
 
-- **Tenant SKU inventory (cost basis)**: `Get-MgSubscribedSku` for `prepaidUnits`/`consumedUnits`/`servicePlans` per SKU. Microsoft Graph does **not** expose licence pricing — the cost basis is an external input (CSP/Partner Center price list, a maintained CSV, or ITGlue) and must be flagged as a dependency, not invented or hardcoded.
+No pricing/cost-basis lookup is needed anywhere below — confirmed out of scope for v1 (see `CLAUDE.md`). `Get-MgSubscribedSku` (`prepaidUnits`/`consumedUnits`/`servicePlans` per SKU) is still needed as tenant-wide SKU inventory, but purely to support duplicate/overlap detection and report counts, not a dollar cost basis.
+
 - **Disabled accounts with paid licences**: `Get-MgUser -Property accountEnabled,assignedLicenses,licenseAssignmentStates` — an account with `accountEnabled: $false` and a non-empty `assignedLicenses` is the finding. Check `licenseAssignmentStates[].assignedByGroup`: a licence assigned via group membership needs the group edited, not `Set-MgUserLicense`, to remove — and per the enforcement note above, that group edit is itself a mutation this runtime must never perform.
-- **Shared mailboxes with unnecessary licences**: `Get-EXOMailbox -RecipientTypeDetails SharedMailbox` cross-referenced with `Get-MgUserLicenseDetail` for that mailbox's account. A shared mailbox legitimately needs a licence above 50 GB or when placed on litigation hold/in-place archive — check mailbox size and hold status before flagging it as waste, not just presence of a licence.
-- **Licensed users who have never signed in**: `Get-MgUser -Property signInActivity,createdDateTime,userType` plus `Get-MgUserLicenseDetail`. `signInActivity` requires the `AuditLog.Read.All` permission **and Entra ID P1/P2 in the client tenant** — if a tenant lacks P1/P2, this field is unavailable there and the finding is `Unknown` for that tenant, not absent. `lastSignInDateTime = null` is itself ambiguous (never signed in vs. beyond Entra's retention window) — treat it as `Unknown`, never assert "never logged in" from a null value alone.
+- **Duplicate/overlapping licences**: per-user, cross-reference `assignedLicenses`/`licenseAssignmentStates` against a SKU overlap map. **That map does not exist yet** — which specific SKU pairs count as redundant is an open dependency (see `CLAUDE.md`), not something to invent from plausible-looking Microsoft SKU names.
+- **Shared mailboxes with paid licences**: `Get-EXOMailbox -RecipientTypeDetails SharedMailbox` cross-referenced with `Get-MgUserLicenseDetail` for that mailbox's account. **There is no confirmed auto-exception rule based on mailbox size, litigation hold, or archive status.** Every licensed shared mailbox is a "needs manual review" finding, not an automatic waste verdict or an automatic pass — the stakeholder confirmed this is context-dependent (e.g. some are used for mail-merge sends) and cannot be resolved by a size/hold heuristic.
+- **Licensed users who have never signed in**: `Get-MgUser -Property signInActivity,createdDateTime,userType` plus `Get-MgUserLicenseDetail`. `signInActivity` requires the `AuditLog.Read.All` permission **and Entra ID P1/P2 in the client tenant** — if a tenant lacks P1/P2, this field is unavailable there and the finding is `Unknown` for that tenant, not absent. `lastSignInDateTime = null` is itself ambiguous (never signed in vs. beyond Entra's retention window) — treat it as `Unknown`, never assert "never logged in" from a null value alone. Confirmed thresholds: 30 days of inactivity flags an existing user; a new user gets a 30-day grace period from `createdDateTime` before this finding can apply at all.
+- **Service/automation accounts**: identify (exact detection heuristic still to be defined — e.g. `userType`, naming convention, or a dedicated group; don't assume one without confirming) and report **separately** from regular user findings — never excluded from the report, never merged into another category.
 
 ## Resilience
 
 - Wrap calls in bounded retry with exponential backoff on 429/throttling responses (Graph `Retry-After` header, EXO throttling errors) — never a tight retry loop, never an unbounded one.
 - A single client tenant's failure must not stop the run for other tenants — catch, record the failure against that tenant, continue.
-- Never log mailbox contents, subjects, or recipient addresses beyond what a report legitimately needs; treat tenant identifiers, mailbox addresses, and licence cost figures as sensitive in logs.
+- Never log mailbox contents, subjects, or recipient addresses beyond what a report legitimately needs; treat tenant identifiers and mailbox addresses as sensitive in logs.
