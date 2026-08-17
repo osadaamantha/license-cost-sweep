@@ -230,3 +230,6 @@ credentials*
 *.pem
 *.key
 *.cer
+
+# Local handover notes — internal reference only, never part of tracked history
+handover/
