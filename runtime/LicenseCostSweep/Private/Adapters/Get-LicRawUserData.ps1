@@ -1,11 +1,12 @@
 function Get-LicRawUserData {
     <#
         .SYNOPSIS
-        Collects the raw user/licence data for one tenant.
+        Retry-wrapped, paged Graph read of every user's base licence-audit fields.
 
         .DESCRIPTION
-        Not implemented yet. This will become the real Graph-backed user and licence
-        collection path.
+        Kept separate from sign-in activity on purpose: signInActivity depends on
+        AuditLog.Read.All and Entra ID P1/P2, while the base user/licence read should
+        still succeed independently.
     #>
     [CmdletBinding()]
     [OutputType([object[]])]
@@ -14,5 +15,17 @@ function Get-LicRawUserData {
         [string]$TenantId
     )
 
-    throw [System.NotImplementedException]::new('Get-LicRawUserData is not implemented yet.')
+    $uri = '/v1.0/users?$select=id,userPrincipalName,displayName,accountEnabled,createdDateTime,assignedLicenses&$top=999'
+    $users = @()
+
+    do {
+        $page = Invoke-WithRetry -OperationName 'Get-LicRawUserData' -ScriptBlock {
+            Invoke-MgGraphRequest -Method GET -Uri $uri
+        }
+
+        $users += @($page.value)
+        $uri = $page.'@odata.nextLink'
+    } while ($uri)
+
+    $users
 }
