@@ -4,11 +4,39 @@ function Get-LicenseCostSweepConfiguration {
         Reads and validates the per-tenant config workbook rows for this run.
 
         .DESCRIPTION
-        Not implemented yet. Adapter/orchestration wiring lands in a later pass; this
-        pass only locks the parameter signature.
+        Adapter-driven config-reader orchestrator. The adapter supplies raw workbook
+        rows; this function validates and normalizes each row through
+        ConvertTo-LicTenantConfig, then returns only the enabled tenants for this run.
+        -Adapter exists for test/replay injection only -- production call paths never
+        pass it.
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [hashtable]$Adapter
+    )
 
-    throw [System.NotImplementedException]::new('Get-LicenseCostSweepConfiguration is not implemented yet -- adapter/orchestration wiring lands in a later pass.')
+    if ($null -eq $Adapter -or -not $Adapter.ContainsKey('GetConfigRows') -or $Adapter.GetConfigRows -isnot [scriptblock]) {
+        throw "Get-LicenseCostSweepConfiguration requires -Adapter with a GetConfigRows scriptblock."
+    }
+
+    Write-AuditLog -Message 'Loading sweep configuration' -Data @{}
+
+    $rows = & $Adapter.GetConfigRows
+    if ($null -eq $rows) {
+        $rows = @()
+    }
+
+    $configs = @()
+    foreach ($row in @($rows)) {
+        $configs += ConvertTo-LicTenantConfig -Row $row
+    }
+
+    $enabledConfigs = @($configs | Where-Object { $_.Enabled })
+
+    Write-AuditLog -Message 'Loaded sweep configuration' -Data @{
+        totalTenantCount   = @($configs).Count
+        enabledTenantCount = @($enabledConfigs).Count
+    }
+
+    return $enabledConfigs
 }
