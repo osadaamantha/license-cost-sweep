@@ -20,8 +20,11 @@ function Get-LicTenantEvidence {
 
         [Parameter(Mandatory)]
         [string]$RunId
-
         ,
+
+        [hashtable]$TenantContext,
+
+        [hashtable]$Session,
 
         [hashtable]$Adapter
     )
@@ -43,12 +46,12 @@ function Get-LicTenantEvidence {
     }
     else {
         @{
-            GetUsers                   = { param($TenantId) Get-LicRawUserData -TenantId $TenantId }
-            GetMailboxRecipients       = { param($TenantId) Get-LicRawMailboxRecipientData -TenantId $TenantId }
-            GetSignInActivity          = { param($TenantId) Get-LicRawSignInActivityData -TenantId $TenantId }
-            GetPaidSkuIds              = { param($TenantId) Get-LicPaidSkuIds -TenantId $TenantId }
-            GetOverlapMap              = { param($TenantId) @() }
-            GetServiceAccountPredicate = { param($TenantId) $null }
+            GetUsers                   = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicRawUserData -TenantId $ResolvedTenantId }
+            GetMailboxRecipients       = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicRawMailboxRecipientData -TenantId $ResolvedTenantId }
+            GetSignInActivity          = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicRawSignInActivityData -TenantId $ResolvedTenantId }
+            GetPaidSkuIds              = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicPaidSkuIds -TenantId $ResolvedTenantId }
+            GetOverlapMap              = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) @() }
+            GetServiceAccountPredicate = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) $null }
         }
     }
 
@@ -59,12 +62,12 @@ function Get-LicTenantEvidence {
         }
     }
 
-    $rawUsers = @(& $collectors.GetUsers $TenantId)
-    $rawRecipients = @(& $collectors.GetMailboxRecipients $TenantId)
-    $signInResult = & $collectors.GetSignInActivity $TenantId
-    $paidSkuIds = @(& $collectors.GetPaidSkuIds $TenantId)
-    $overlapMap = @(& $collectors.GetOverlapMap $TenantId)
-    $serviceAccountPredicate = & $collectors.GetServiceAccountPredicate $TenantId
+    $rawUsers = @(& $collectors.GetUsers $TenantId $TenantContext $Session)
+    $rawRecipients = @(& $collectors.GetMailboxRecipients $TenantId $TenantContext $Session)
+    $signInResult = & $collectors.GetSignInActivity $TenantId $TenantContext $Session
+    $paidSkuIds = @(& $collectors.GetPaidSkuIds $TenantId $TenantContext $Session)
+    $overlapMap = @(& $collectors.GetOverlapMap $TenantId $TenantContext $Session)
+    $serviceAccountPredicate = & $collectors.GetServiceAccountPredicate $TenantId $TenantContext $Session
 
     $recipientById = @{}
     foreach ($recipient in $rawRecipients) {

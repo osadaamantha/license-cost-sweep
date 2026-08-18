@@ -155,4 +155,53 @@ Describe 'Invoke-TenantSweep' {
         $result.ErrorsAndUnknowns[0].Stage | Should -Be 'GetTenantEvidence'
         $result.Summary.ErrorCount | Should -Be 1
     }
+
+    It 'connects and disconnects around the default adapter path' {
+        InModuleScope LicenseCostSweep {
+            $asOfUtc = [datetime]::Parse('2026-08-18T00:00:00Z').ToUniversalTime()
+            $script:disconnectCalled = $false
+
+            Mock Get-LicTenantRuntimeContext {
+                @{
+                    TenantId                = 'tenant-a'
+                    AppId                   = 'app-1'
+                    Organization            = 'tenant-a'
+                    IntegrationUamiClientId = 'uami-1'
+                }
+            }
+
+            Mock Get-LicDefaultAdapterSet {
+                @{
+                    Connect = {
+                        param($TenantConfig)
+                        @{ TenantId = $TenantConfig.TenantId }
+                    }
+                    Disconnect = {
+                        param($Session)
+                        $script:disconnectCalled = $true
+                    }
+                    GetTenantEvidence = {
+                        param($Session, $TenantConfig, $AsOfUtc, $RunId)
+                        @{
+                            DisabledAccountInputs = @(
+                                @{
+                                    UserObjectId             = 'user-disabled'
+                                    UserPrincipalName        = 'disabled@contoso.example'
+                                    DisplayName              = 'Disabled User'
+                                    AccountEnabled           = $false
+                                    AssignedPaidLicenseCount = 1
+                                    AssignedPaidLicenseSkus  = @('sku-e3')
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            $result = Invoke-TenantSweep -TenantId 'tenant-a' -AsOfUtc $asOfUtc -RunId 'run-004'
+
+            $result.DisabledAccountFindings.Count | Should -Be 1
+            $script:disconnectCalled | Should -Be $true
+        }
+    }
 }

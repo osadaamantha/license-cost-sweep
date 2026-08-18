@@ -13,6 +13,15 @@ function Get-LicDefaultAdapterSet {
     param()
 
     @{
+        Connect          = {
+            param($TenantConfig)
+            Connect-LicTenantSession -TenantId $TenantConfig.TenantId -AppId $TenantConfig.AppId `
+                -Organization $TenantConfig.Organization -IntegrationUamiClientId $TenantConfig.IntegrationUamiClientId
+        }
+        Disconnect       = {
+            param($Session)
+            Disconnect-LicTenantSession -Session $Session
+        }
         GetConfigRows    = {
             $siteId = $env:CONFIG_SITE_ID
             $driveItemPath = $env:CONFIG_DRIVE_ITEM_PATH
@@ -24,8 +33,9 @@ function Get-LicDefaultAdapterSet {
             Get-LicConfigWorkbookRows -SiteId $siteId -DriveItemPath $driveItemPath
         }
         GetTenantEvidence = {
-            param($TenantId, $AsOfUtc, $RunId)
-            Get-LicTenantEvidence -TenantId $TenantId -AsOfUtc $AsOfUtc -RunId $RunId
+            param($Session, $TenantConfig, $AsOfUtc, $RunId)
+            Get-LicTenantEvidence -TenantId $TenantConfig.TenantId -AsOfUtc $AsOfUtc -RunId $RunId `
+                -TenantContext $TenantConfig -Session $Session
         }
         WriteWorkbook    = {
             param($WorkbookPayload)

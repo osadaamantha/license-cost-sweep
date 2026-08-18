@@ -66,6 +66,8 @@ function Invoke-TenantSweep {
     }
 
     $adapters = if ($Adapter) { $Adapter } else { Get-LicDefaultAdapterSet }
+    $tenantConfig = if ($Adapter) { @{ TenantId = $TenantId } } else { Get-LicTenantRuntimeContext -TenantId $TenantId }
+    $session = $null
 
     $result = @{
         TenantId                    = $TenantId
@@ -116,7 +118,13 @@ function Invoke-TenantSweep {
     }
 
     try {
-        $evidence = & $adapters.GetTenantEvidence $TenantId $AsOfUtc.ToUniversalTime() $RunId
+        if (-not $Adapter -and $adapters.ContainsKey('Connect') -and $adapters.Connect -is [scriptblock]) {
+            $session = & $adapters.Connect $tenantConfig
+            $evidence = & $adapters.GetTenantEvidence $session $tenantConfig $AsOfUtc.ToUniversalTime() $RunId
+        }
+        else {
+            $evidence = & $adapters.GetTenantEvidence $TenantId $AsOfUtc.ToUniversalTime() $RunId
+        }
     }
     catch {
         Add-LicFailureRecord -Stage 'GetTenantEvidence' -TargetId '' -ErrorRecord $_
@@ -136,6 +144,11 @@ function Invoke-TenantSweep {
         }
 
         return $result
+    }
+    finally {
+        if ($session -and $adapters.ContainsKey('Disconnect') -and $adapters.Disconnect -is [scriptblock]) {
+            & $adapters.Disconnect $session
+        }
     }
 
     if ($null -eq $evidence) {
