@@ -65,6 +65,8 @@ function Invoke-TenantSweep {
         @($Value | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join '; '
     }
 
+    $adapters = if ($Adapter) { $Adapter } else { Get-LicDefaultAdapterSet }
+
     $result = @{
         TenantId                    = $TenantId
         RunId                       = $RunId
@@ -104,8 +106,8 @@ function Invoke-TenantSweep {
         }
     }
 
-    if ($null -eq $Adapter -or -not $Adapter.ContainsKey('GetTenantEvidence') -or $Adapter.GetTenantEvidence -isnot [scriptblock]) {
-        throw "Invoke-TenantSweep requires -Adapter with a GetTenantEvidence scriptblock."
+    if ($null -eq $adapters -or -not $adapters.ContainsKey('GetTenantEvidence') -or $adapters.GetTenantEvidence -isnot [scriptblock]) {
+        throw "Invoke-TenantSweep requires an adapter set with a GetTenantEvidence scriptblock."
     }
 
     Write-AuditLog -Message "Starting tenant sweep" -Data @{
@@ -114,7 +116,7 @@ function Invoke-TenantSweep {
     }
 
     try {
-        $evidence = & $Adapter.GetTenantEvidence $TenantId $AsOfUtc.ToUniversalTime() $RunId
+        $evidence = & $adapters.GetTenantEvidence $TenantId $AsOfUtc.ToUniversalTime() $RunId
     }
     catch {
         Add-LicFailureRecord -Stage 'GetTenantEvidence' -TargetId '' -ErrorRecord $_

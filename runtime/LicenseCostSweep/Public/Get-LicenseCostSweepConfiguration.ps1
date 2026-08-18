@@ -15,13 +15,15 @@ function Get-LicenseCostSweepConfiguration {
         [hashtable]$Adapter
     )
 
-    if ($null -eq $Adapter -or -not $Adapter.ContainsKey('GetConfigRows') -or $Adapter.GetConfigRows -isnot [scriptblock]) {
-        throw "Get-LicenseCostSweepConfiguration requires -Adapter with a GetConfigRows scriptblock."
+    $adapters = if ($Adapter) { $Adapter } else { Get-LicDefaultAdapterSet }
+
+    if ($null -eq $adapters -or -not $adapters.ContainsKey('GetConfigRows') -or $adapters.GetConfigRows -isnot [scriptblock]) {
+        throw "Get-LicenseCostSweepConfiguration requires an adapter set with a GetConfigRows scriptblock."
     }
 
     Write-AuditLog -Message 'Loading sweep configuration' -Data @{}
 
-    $rows = & $Adapter.GetConfigRows
+    $rows = & $adapters.GetConfigRows
     if ($null -eq $rows) {
         $rows = @()
     }

@@ -7,7 +7,7 @@ Describe 'Export-LicenseCostSweepWorkbook' {
     It 'throws when the adapter does not provide WriteWorkbook as a scriptblock' {
         {
             Export-LicenseCostSweepWorkbook -TenantFindings @{} -OutputPath 'C:\temp\tenant.xlsx' -Adapter @{}
-        } | Should -Throw 'Export-LicenseCostSweepWorkbook requires -Adapter with a WriteWorkbook scriptblock.'
+        } | Should -Throw 'Export-LicenseCostSweepWorkbook requires an adapter set with a WriteWorkbook scriptblock.'
     }
 
     It 'builds a workbook payload using the layout contract and tenant findings' {

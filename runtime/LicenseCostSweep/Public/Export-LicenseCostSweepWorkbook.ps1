@@ -20,8 +20,10 @@ function Export-LicenseCostSweepWorkbook {
         [hashtable]$Adapter
     )
 
-    if ($null -eq $Adapter -or -not $Adapter.ContainsKey('WriteWorkbook') -or $Adapter.WriteWorkbook -isnot [scriptblock]) {
-        throw "Export-LicenseCostSweepWorkbook requires -Adapter with a WriteWorkbook scriptblock."
+    $adapters = if ($Adapter) { $Adapter } else { Get-LicDefaultAdapterSet }
+
+    if ($null -eq $adapters -or -not $adapters.ContainsKey('WriteWorkbook') -or $adapters.WriteWorkbook -isnot [scriptblock]) {
+        throw "Export-LicenseCostSweepWorkbook requires an adapter set with a WriteWorkbook scriptblock."
     }
 
     $layout = Get-WorkbookLayout
@@ -135,7 +137,7 @@ function Export-LicenseCostSweepWorkbook {
         sheetCount = @($workbookPayload.Sheets).Count
     }
 
-    & $Adapter.WriteWorkbook $workbookPayload
+    & $adapters.WriteWorkbook $workbookPayload
 
     return $OutputPath
 }

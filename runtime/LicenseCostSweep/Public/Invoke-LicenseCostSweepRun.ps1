@@ -30,7 +30,8 @@ function Invoke-LicenseCostSweepRun {
         asOfUtc = Get-UtcTimestamp -DateTime $effectiveAsOfUtc
     }
 
-    $tenantConfigs = Get-LicenseCostSweepConfiguration -Adapter $Adapter
+    $adapters = if ($Adapter) { $Adapter } else { Get-LicDefaultAdapterSet }
+    $tenantConfigs = Get-LicenseCostSweepConfiguration -Adapter $adapters
     $tenantResults = @()
 
     foreach ($tenantConfig in @($tenantConfigs)) {
@@ -38,7 +39,7 @@ function Invoke-LicenseCostSweepRun {
             -TenantId $tenantConfig.TenantId `
             -AsOfUtc $effectiveAsOfUtc `
             -RunId $runId `
-            -Adapter $Adapter
+            -Adapter $adapters
     }
 
     $result = @{

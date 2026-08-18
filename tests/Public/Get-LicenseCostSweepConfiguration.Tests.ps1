@@ -7,7 +7,7 @@ Describe 'Get-LicenseCostSweepConfiguration' {
     It 'throws when the adapter does not provide GetConfigRows as a scriptblock' {
         {
             Get-LicenseCostSweepConfiguration -Adapter @{}
-        } | Should -Throw 'Get-LicenseCostSweepConfiguration requires -Adapter with a GetConfigRows scriptblock.'
+        } | Should -Throw 'Get-LicenseCostSweepConfiguration requires an adapter set with a GetConfigRows scriptblock.'
     }
 
     It 'returns only enabled tenant configs, preserving workbook order among enabled rows' {

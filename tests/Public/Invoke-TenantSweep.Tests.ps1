@@ -9,7 +9,7 @@ Describe 'Invoke-TenantSweep' {
 
         {
             Invoke-TenantSweep -TenantId 'tenant-a' -AsOfUtc $asOfUtc -RunId 'run-001' -Adapter @{}
-        } | Should -Throw 'Invoke-TenantSweep requires -Adapter with a GetTenantEvidence scriptblock.'
+        } | Should -Throw 'Invoke-TenantSweep requires an adapter set with a GetTenantEvidence scriptblock.'
     }
 
     It 'returns tenant-scoped findings and summary counts from adapter-supplied evidence' {
