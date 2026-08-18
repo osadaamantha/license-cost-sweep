@@ -14,7 +14,14 @@ function Get-LicDefaultAdapterSet {
 
     @{
         GetConfigRows    = {
-            Get-LicConfigWorkbookRows
+            $siteId = $env:CONFIG_SITE_ID
+            $driveItemPath = $env:CONFIG_DRIVE_ITEM_PATH
+
+            if ([string]::IsNullOrWhiteSpace($siteId) -or [string]::IsNullOrWhiteSpace($driveItemPath)) {
+                throw 'CONFIG_SITE_ID/CONFIG_DRIVE_ITEM_PATH are not set -- cannot reach the primary config workbook.'
+            }
+
+            Get-LicConfigWorkbookRows -SiteId $siteId -DriveItemPath $driveItemPath
         }
         GetTenantEvidence = {
             param($TenantId, $AsOfUtc, $RunId)
