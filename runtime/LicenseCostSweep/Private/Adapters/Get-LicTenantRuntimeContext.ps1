@@ -30,6 +30,8 @@ function Get-LicTenantRuntimeContext {
         TenantId                = $TenantId
         TenantDomain            = $tenantRow.TenantDomain
         ReportRecipients        = @($tenantRow.ReportRecipients)
+        OverlapMap              = @($tenantRow.OverlapMap)
+        ServiceAccountUpns      = @($tenantRow.ServiceAccountUpns)
         Notes                   = $tenantRow.Notes
         AppId                   = 'c0b73c04-cb71-4b45-ad2a-83244603b54b'
         IntegrationUamiClientId = $integrationUamiClientId

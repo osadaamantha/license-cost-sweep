@@ -53,6 +53,44 @@ Describe 'ConvertTo-LicTenantConfig' {
         }
     }
 
+    It 'Parses optional OverlapMapJson into validated overlap-rule entries' {
+        InModuleScope LicenseCostSweep {
+            $row = @{
+                TenantId       = 'tenant-a'
+                TenantDomain   = 'contoso.example'
+                OverlapMapJson = '[{"PrimarySkuId":"sku-e5","PrerequisiteSkuId":"sku-e3","Reason":"E5SupersedesE3"}]'
+            }
+            $config = ConvertTo-LicTenantConfig -Row $row
+            $config.OverlapMap.Count | Should -Be 1
+            $config.OverlapMap[0].Reason | Should -Be 'E5SupersedesE3'
+        }
+    }
+
+    It 'Invalid OverlapMapJson throws naming the optional column' {
+        InModuleScope LicenseCostSweep {
+            $row = @{
+                TenantId       = 'tenant-a'
+                TenantDomain   = 'contoso.example'
+                OverlapMapJson = '[{"PrimarySkuId":"sku-e5"}]'
+            }
+
+            { ConvertTo-LicTenantConfig -Row $row } |
+                Should -Throw "Config workbook row for tenant 'tenant-a' has an invalid entry in optional column 'OverlapMapJson'"
+        }
+    }
+
+    It 'Comma-separated ServiceAccountUpns splits, trims, and filters empty entries' {
+        InModuleScope LicenseCostSweep {
+            $row = @{
+                TenantId           = 'tenant-a'
+                TenantDomain       = 'contoso.example'
+                ServiceAccountUpns = 'svc-backup@contoso.example, svc-sync@contoso.example ,'
+            }
+            $config = ConvertTo-LicTenantConfig -Row $row
+            $config.ServiceAccountUpns | Should -Be @('svc-backup@contoso.example', 'svc-sync@contoso.example')
+        }
+    }
+
     It 'Accepts a PSCustomObject row shape, not just a hashtable' {
         InModuleScope LicenseCostSweep {
             $row = [PSCustomObject]@{ TenantId = 'tenant-a'; TenantDomain = 'contoso.example'; Notes = 'demo tenant' }

@@ -35,6 +35,40 @@ function ConvertTo-LicTenantConfig {
         @([string]$Value -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     }
 
+    function ConvertTo-LicOverlapMap {
+        param($Value, [string]$TenantId)
+
+        if ([string]::IsNullOrWhiteSpace([string]$Value)) {
+            return @()
+        }
+
+        try {
+            $parsed = @([string]$Value | ConvertFrom-Json -ErrorAction Stop)
+        }
+        catch {
+            throw "Config workbook row for tenant '$TenantId' has invalid JSON in optional column 'OverlapMapJson'"
+        }
+
+        $normalized = @()
+        foreach ($entry in $parsed) {
+            $primarySkuId = [string](Get-LicRowProp -Obj $entry -Name 'PrimarySkuId')
+            $prerequisiteSkuId = [string](Get-LicRowProp -Obj $entry -Name 'PrerequisiteSkuId')
+            $reason = [string](Get-LicRowProp -Obj $entry -Name 'Reason')
+
+            if ([string]::IsNullOrWhiteSpace($primarySkuId) -or [string]::IsNullOrWhiteSpace($prerequisiteSkuId) -or [string]::IsNullOrWhiteSpace($reason)) {
+                throw "Config workbook row for tenant '$TenantId' has an invalid entry in optional column 'OverlapMapJson'"
+            }
+
+            $normalized += @{
+                PrimarySkuId      = $primarySkuId
+                PrerequisiteSkuId = $prerequisiteSkuId
+                Reason            = $reason
+            }
+        }
+
+        $normalized
+    }
+
     $tenantId = [string](Get-LicRowProp -Obj $Row -Name 'TenantId')
     if ([string]::IsNullOrWhiteSpace($tenantId)) {
         throw "Config workbook row is missing required column 'TenantId'"
@@ -51,6 +85,8 @@ function ConvertTo-LicTenantConfig {
         TenantId         = $tenantId
         TenantDomain     = $tenantDomain
         ReportRecipients = ConvertTo-LicStringList (Get-LicRowProp -Obj $Row -Name 'ReportRecipients')
+        OverlapMap       = ConvertTo-LicOverlapMap (Get-LicRowProp -Obj $Row -Name 'OverlapMapJson') $tenantId
+        ServiceAccountUpns = ConvertTo-LicStringList (Get-LicRowProp -Obj $Row -Name 'ServiceAccountUpns')
         Enabled          = $enabledRaw.ToUpperInvariant() -ne 'N'
         Notes            = [string](Get-LicRowProp -Obj $Row -Name 'Notes' -Default '')
     }

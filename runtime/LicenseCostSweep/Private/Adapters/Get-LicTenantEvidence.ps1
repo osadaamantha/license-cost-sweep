@@ -50,8 +50,8 @@ function Get-LicTenantEvidence {
             GetMailboxRecipients       = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicRawMailboxRecipientData -TenantId $ResolvedTenantId }
             GetSignInActivity          = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicRawSignInActivityData -TenantId $ResolvedTenantId }
             GetPaidSkuIds              = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicPaidSkuIds -TenantId $ResolvedTenantId }
-            GetOverlapMap              = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) @() }
-            GetServiceAccountPredicate = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) $null }
+            GetOverlapMap              = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicConfiguredOverlapMap -TenantContext $ResolvedTenantContext }
+            GetServiceAccountPredicate = { param($ResolvedTenantId, $ResolvedTenantContext, $ResolvedSession) Get-LicConfiguredServiceAccountPredicate -TenantContext $ResolvedTenantContext }
         }
     }
 

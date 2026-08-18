@@ -17,6 +17,8 @@ Describe 'Get-LicTenantRuntimeContext' {
                         TenantId         = 'tenant-a'
                         TenantDomain     = 'contoso.example'
                         ReportRecipients = @('ops@contoso.example')
+                        OverlapMap       = @(@{ PrimarySkuId = 'sku-e5'; PrerequisiteSkuId = 'sku-e3'; Reason = 'E5SupersedesE3' })
+                        ServiceAccountUpns = @('svc-backup@contoso.example')
                         Notes            = 'demo'
                     }
                 )
@@ -27,6 +29,8 @@ Describe 'Get-LicTenantRuntimeContext' {
             $context.TenantId | Should -Be 'tenant-a'
             $context.TenantDomain | Should -Be 'contoso.example'
             $context.ReportRecipients | Should -Be @('ops@contoso.example')
+            $context.OverlapMap.Count | Should -Be 1
+            $context.ServiceAccountUpns | Should -Be @('svc-backup@contoso.example')
             $context.AppId | Should -Be 'c0b73c04-cb71-4b45-ad2a-83244603b54b'
             $context.IntegrationUamiClientId | Should -Be 'uami-123'
             $context.Organization | Should -Be 'tenant-a'
